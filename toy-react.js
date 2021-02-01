@@ -7,6 +7,8 @@ class ElementWrapper {
   setAttribute(name, value) {
     if (name.match(/^on([\s\S]+)$/)) {
       this.root.addEventListener(RegExp.$1.toLowerCase(), value);
+    } else if (name === 'className') {
+      this.root.setAttribute('class', value);
     } else {
       this.root.setAttribute(name, value);
     }
@@ -53,30 +55,37 @@ export class Component {
     this.render()[RENDER_TO_DOM](range);
   }
   rerender() {
-    this._range.deleteContents();
-    this[RENDER_TO_DOM](this._range);
+    let oldRange = this._range;
+
+    let range = document.createRange();
+    range.setStart(oldRange.startContainer, oldRange.startOffset);
+    range.setEnd(oldRange.startContainer, oldRange.startOffset);
+    this[RENDER_TO_DOM](range);
+
+    oldRange.setStart(range.startContainer, range.endOffset);
+    oldRange.deleteContents();
   }
 
   setState(newState) {
-    if (this.sate === null || typeof this.sate !== 'object') {
-      this.sate = newState;
+    if (this.state === null || typeof this.state !== 'object') {
+      this.state = newState;
       this.rerender();
       return;
     }
 
     let merge = (oldState, newState) => {
-      if (oldState) {
-        for (let [key, value] of Object.entries(oldState)) {
-          if (value === null || typeof value !== 'object') {
-            value = newState[key];
+      if (newState) {
+        for (let [key, value] of Object.entries(newState)) {
+          if (Object.prototype.toString.call(value) !== '[object Object]') {
+            oldState[key] = newState[key];
           } else {
-            merge(value, newState[key]);
+            merge(oldState[key], newState[key]);
           }
         }
       }
     };
 
-    merge(this.sate, newState);
+    merge(this.state, newState);
     this.rerender();
   }
 }
@@ -90,7 +99,7 @@ export function createElement(type, attributes, ...children) {
   if (typeof type === 'string') {
     el = new ElementWrapper(type);
   } else {
-    el = new type();
+    el = new type(attributes);
   }
 
   if (attributes) {
@@ -101,6 +110,8 @@ export function createElement(type, attributes, ...children) {
 
   let insertChildren = (children) => {
     for (let child of children) {
+      if (child === null) continue;
+
       if (typeof child === 'string' || typeof child === 'number') {
         child = new TextWrapper(child);
       }
